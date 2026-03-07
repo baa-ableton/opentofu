@@ -355,8 +355,10 @@ func (c *BuiltinEvalContext) EvaluateReplaceTriggeredBy(ctx context.Context, exp
 	if len(ref.Remaining) == 0 {
 		for _, c := range changes {
 			switch c.ChangeSrc.Action {
-			// Only immediate changes to the resource will trigger replacement.
-			case plans.Update, plans.DeleteThenCreate, plans.CreateThenDelete:
+			// Any actionable change to the resource will trigger replacement,
+			// including Create (e.g. when the resource was removed from state
+			// via "state rm" and is being re-created).
+			case plans.Update, plans.DeleteThenCreate, plans.CreateThenDelete, plans.Create:
 				return ref, true, diags
 			}
 		}
@@ -369,10 +371,12 @@ func (c *BuiltinEvalContext) EvaluateReplaceTriggeredBy(ctx context.Context, exp
 	// single change.
 	change := changes[0]
 
-	// Make sure the change is actionable. A create or delete action will have
-	// a change in value, but are not valid for our purposes here.
+	// Make sure the change is actionable. A delete action will have a change
+	// in value, but is not valid for our purposes here. Create is included
+	// because a resource removed from state (via "state rm") and re-created
+	// should also trigger replacement of dependents.
 	switch change.ChangeSrc.Action {
-	case plans.Update, plans.DeleteThenCreate, plans.CreateThenDelete:
+	case plans.Update, plans.DeleteThenCreate, plans.CreateThenDelete, plans.Create:
 		// OK
 	default:
 		return nil, false, diags
